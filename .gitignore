@@ -216,3 +216,15 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+
+data/
+
+docs/
+
+# Airflow runtime
+airflow/logs/
+
+# Docker volumes (gérés par Docker, pas versionnés)
+minio_data/
+postgres_data/
