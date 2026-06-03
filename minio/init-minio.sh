@@ -14,6 +14,7 @@ echo "[OK] Buckets créés"
 mc admin policy create local policy-ingestion   /policies/policy-ingestion.json
 mc admin policy create local policy-etl         /policies/policy-etl.json
 mc admin policy create local policy-analyst     /policies/policy-analyst.json
+mc admin policy create local policy-engineer    /policies/policy-engineer.json
 mc admin policy create local policy-openmetadata /policies/policy-openmetadata.json
 echo "[OK] Policies créées"
 
@@ -21,6 +22,7 @@ echo "[OK] Policies créées"
 mc admin user add local "${MINIO_USER_INGESTION}"    "${MINIO_PASS_INGESTION}"
 mc admin user add local "${MINIO_USER_ETL}"          "${MINIO_PASS_ETL}"
 mc admin user add local "${MINIO_USER_ANALYST}"      "${MINIO_PASS_ANALYST}"
+mc admin user add local "${MINIO_USER_ENGINEER}"     "${MINIO_PASS_ENGINEER}"
 mc admin user add local "${MINIO_USER_OPENMETADATA}" "${MINIO_PASS_OPENMETADATA}"
 echo "[OK] Users créés"
 
@@ -28,7 +30,8 @@ echo "[OK] Users créés"
 mc admin policy attach local policy-ingestion    --user "${MINIO_USER_INGESTION}"
 mc admin policy attach local policy-etl          --user "${MINIO_USER_ETL}"
 mc admin policy attach local policy-analyst      --user "${MINIO_USER_ANALYST}"
+mc admin policy attach local policy-engineer     --user "${MINIO_USER_ENGINEER}"
 mc admin policy attach local policy-openmetadata --user "${MINIO_USER_OPENMETADATA}"
 echo "[OK] Policies attachées aux users"
 
-echo "MinIO prêt : 4 buckets, 4 policies, 4 users."
+echo "MinIO prêt : 4 buckets, 5 policies, 5 users."
