@@ -220,8 +220,6 @@ __marimo__/
 
 data/
 
-docs/
-
 # Airflow runtime
 airflow/logs/
 
