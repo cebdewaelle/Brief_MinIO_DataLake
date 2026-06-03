@@ -56,10 +56,10 @@
 Les objets dans `raw/`, `staging/` et `curated/` suivent un partitionnement Hive-style :
 
 ```
-<bucket>/line=<lineX>/year=YYYY/month=MM/<fichier>.csv
+<bucket>/production_lines/line=<lineX>/year=YYYY/month=MM/<fichier>.csv
 ```
 
-Exemple : `raw/line=lineA/year=2024/month=06/sensors_2024-06-03.csv`
+Exemple : `raw/production_lines/line=lineA/year=2024/month=06/sensors_2024-06-03.csv`
 
 Ce schéma permet un pruning de partitions natif avec Spark/Hive et facilite le filtrage temporel lors du crawling OpenMetadata.
 
