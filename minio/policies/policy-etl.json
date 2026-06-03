@@ -3,12 +3,23 @@
   "Statement": [
     {
       "Effect": "Allow",
-      "Action": ["s3:ListBucket", "s3:GetObject"],
-      "Resource": ["arn:aws:s3:::raw", "arn:aws:s3:::raw/*"]
+      "Action": [
+        "s3:ListBucket",
+        "s3:GetObject"
+      ],
+      "Resource": [
+        "arn:aws:s3:::raw",
+        "arn:aws:s3:::raw/*"
+      ]
     },
     {
       "Effect": "Allow",
-      "Action": ["s3:ListBucket", "s3:GetObject", "s3:PutObject", "s3:DeleteObject"],
+      "Action": [
+        "s3:ListBucket",
+        "s3:GetObject",
+        "s3:PutObject",
+        "s3:DeleteObject"
+      ],
       "Resource": [
         "arn:aws:s3:::staging",
         "arn:aws:s3:::staging/*",
