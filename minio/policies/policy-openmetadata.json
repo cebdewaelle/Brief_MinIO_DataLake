@@ -1,0 +1,20 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": ["s3:ListAllMyBuckets"],
+      "Resource": ["arn:aws:s3:::*"]
+    },
+    {
+      "Effect": "Allow",
+      "Action": ["s3:ListBucket", "s3:GetObject"],
+      "Resource": [
+        "arn:aws:s3:::raw",    "arn:aws:s3:::raw/*",
+        "arn:aws:s3:::staging","arn:aws:s3:::staging/*",
+        "arn:aws:s3:::curated","arn:aws:s3:::curated/*",
+        "arn:aws:s3:::archive","arn:aws:s3:::archive/*"
+      ]
+    }
+  ]
+}
