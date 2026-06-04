@@ -1,18 +1,12 @@
 """
-DAG de transformation des chunks journaliers LineA : raw/ → staging/.
+DAG de transformation des chunks journaliers LineA : raw/ → staging/ (schéma Silver unifié).
 
-Contrairement à transform_staging qui lit depuis le filesystem local,
-ce DAG découvre les chunks directement dans raw/ via list_objects_v2.
-C'est le pattern correct pour un transform : il ne dépend pas du filesystem
-local mais uniquement de ce qui est présent dans le DataLake.
+Schéma de sortie :
+  timestamp, line_id, temperature, pressure, elapsed_time, label, source_file, ingested_at
 
-Transformations appliquées (identiques à transform_staging) :
-  - Colonnes en lowercase
-  - Timestamp normalisé ISO 8601
-  - Types numériques explicites (elapsed_time → float64)
-  - Format de sortie : Parquet compressé snappy
-
-Schedule : None → "@daily" pour automatiser à la suite de ingest_lineA_batch
+Découvre les chunks directement dans raw/ via list_objects_v2 — pas de dépendance filesystem.
+Transformations via apply_silver_schema() (même logique que transform_staging).
+Format : Parquet compressé gzip.
 """
 
 from __future__ import annotations
@@ -24,8 +18,6 @@ from datalake_datasets import RAW_LINEA
 RAW_BUCKET = "raw"
 STAGING_BUCKET = "staging"
 LINE_PREFIX = "production_lines/line=lineA/"
-
-EXPECTED_COLUMNS = {"timestamp", "temperature", "pressure", "elapsed_time", "label"}
 
 
 @dag(
@@ -80,35 +72,20 @@ def transform_lineA_batch():
         )
 
         raw_key: str = chunk["key"]
-        # raw_key  ex: production_lines/line=lineA/year=2025/month=05/LineA_2025-05-01.csv
-        # staging_key :  même chemin, extension .parquet
-        staging_key = raw_key.replace(RAW_BUCKET, STAGING_BUCKET).rsplit(".", 1)[0] + ".parquet"
-        # Correction : le bucket ne fait pas partie de la clé, on remplace juste l'extension
         staging_key = raw_key.rsplit(".", 1)[0] + ".parquet"
+        source_file = raw_key.split("/")[-1]
 
         client = get_s3_client(role="etl")
         raw_bytes = get_object_as_bytes(client, RAW_BUCKET, raw_key)
-
         df = pd.read_csv(io.BytesIO(raw_bytes))
 
-        # ── Transformations ───────────────────────────────────────────────
-        df.columns = [col.lower() for col in df.columns]
+        # ── Schéma Silver unifié ──────────────────────────────────────────
+        from minio_utils import apply_silver_schema
+        df = apply_silver_schema(df, line_id="lineA", source_file=source_file)
 
-        for col in EXPECTED_COLUMNS - set(df.columns):
-            df[col] = None
-
-        df["timestamp"] = (
-            pd.to_datetime(df["timestamp"], errors="raise")
-            .dt.strftime("%Y-%m-%dT%H:%M:%S")
-        )
-        for col in ("temperature", "pressure"):
-            df[col] = pd.to_numeric(df[col], errors="raise").astype("float64")
-        df["elapsed_time"] = pd.to_numeric(df["elapsed_time"], errors="coerce").astype("float64")
-        df["label"] = df["label"].astype("int8")
-
-        # ── Sérialisation Parquet ─────────────────────────────────────────
+        # ── Sérialisation Parquet gzip ────────────────────────────────────
         buffer = io.BytesIO()
-        df.to_parquet(buffer, index=False, compression="snappy", engine="pyarrow")
+        df.to_parquet(buffer, index=False, compression="gzip", engine="pyarrow")
         parquet_bytes = buffer.getvalue()
 
         hex_md5, b64_md5 = compute_md5_bytes(parquet_bytes)
