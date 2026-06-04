@@ -11,11 +11,13 @@ curated/      → données certifiées, consommables par les analystes
 archive/      → données archivées automatiquement après 180 jours (ILM)
 ```
 
-Chaque bucket suit un partitionnement Hive-style :
+Partitionnement Hive-style :
 
 ```
 <bucket>/production_lines/line=<lineX>/year=YYYY/month=MM/<fichier>
 ```
+
+LineA est ingérée en **chunks journaliers** (simulation de flux réel). Les autres lignes sont ingérées en fichier unique par run.
 
 ## Stack technique
 
@@ -70,9 +72,58 @@ Voir [docs/droits_et_gouvernance.md](docs/droits_et_gouvernance.md) pour la matr
 
 L'initialisation des buckets, policies et users est automatique au démarrage via `minio/init-minio.sh`.
 
-## Ingestion des CSV
+## Pipeline ETL — DAGs Airflow
 
-Les 5 fichiers CSV (`data/`) représentent les lignes de production LineA → LineE.
+### Vue d'ensemble
+
+Les DAGs d'ingestion se déclenchent **manuellement** (ou peuvent être planifiés). Les DAGs de transformation s'enchaînent **automatiquement** via le mécanisme Airflow Datasets — dès qu'un DAG d'ingestion termine avec succès, son transform associé démarre sans intervention.
+
+```
+[Manuel]  ingest_raw_csv      ──► (Dataset RAW_MULTI) ──► transform_staging
+[Manuel]  ingest_lineA_batch  ──► (Dataset RAW_LINEA) ──► transform_lineA_batch
+```
+
+L'onglet **Datasets** dans l'UI Airflow affiche le graphe de dépendances entre DAGs.
+
+### Détail des DAGs
+
+| DAG | Déclenchement | Source | Destination | Pattern |
+|-----|--------------|--------|-------------|---------|
+| `ingest_raw_csv` | Manuel | `data/` LineB→E | `raw/` CSV | 4 tâches statiques |
+| `ingest_lineA_batch` | Manuel | `data/` LineA | `raw/` CSV/jour + manifest | Dynamic task mapping |
+| `transform_staging` | Auto (Dataset) | `raw/` LineB→E | `staging/` Parquet | 4 tâches statiques |
+| `transform_lineA_batch` | Auto (Dataset) | `raw/` LineA chunks | `staging/` Parquet/jour | Dynamic task mapping |
+
+### `ingest_raw_csv`
+- 4 tâches upload en parallèle (LineB, C, D, E) + `verify_md5`
+- `verify_md5` déclare le Dataset `RAW_MULTI` → déclenche `transform_staging`
+- Idempotent : skip si MD5 identique en MinIO
+- Credentials : user `ingestion`
+
+### `ingest_lineA_batch`
+- Découpe LineA (~10 000 lignes) en chunks journaliers (~1 440 lignes/jour)
+- Dynamic task mapping : une tâche `upload_chunk` par jour, créée à l'exécution
+- `write_manifest` génère `raw/production_lines/line=lineA/LineA_manifest.json`
+- `write_manifest` déclare le Dataset `RAW_LINEA` → déclenche `transform_lineA_batch`
+- Credentials : user `ingestion`
+
+### `transform_staging`
+- Déclenché automatiquement après `ingest_raw_csv`
+- Lit les CSV depuis `raw/` et écrit des Parquet dans `staging/`
+- Transformations : colonnes en lowercase, timestamp ISO 8601, types explicites
+- `elapsed_time` absent sur LineC/D/E → `NULL`
+- Parquet compressé snappy, métadonnées : md5, source, rows
+- Credentials : user `etl`
+
+### `transform_lineA_batch`
+- Déclenché automatiquement après `ingest_lineA_batch`
+- Découvre les chunks dans `raw/` via `list_objects_v2` (pas de dépendance filesystem)
+- Dynamic task mapping : une tâche `transform_chunk` par chunk trouvé
+- Credentials : user `etl`
+
+## Ingestion manuelle (CLI)
+
+Pour uploader les CSV sans passer par Airflow :
 
 ```bash
 # Créer le venv et installer les dépendances
@@ -85,32 +136,11 @@ AWS_ENDPOINT_URL=http://localhost:9000 .venv/bin/python ingestion/upload_raw.py 
 # Uploader vers raw/ avec validation MD5 côté serveur
 AWS_ENDPOINT_URL=http://localhost:9000 .venv/bin/python ingestion/upload_raw.py
 
-# Vérifier l'intégrité post-upload (ref / local / métadonnée MinIO / ETag)
+# Vérifier l'intégrité post-upload
 AWS_ENDPOINT_URL=http://localhost:9000 .venv/bin/python ingestion/upload_raw.py --verify
 ```
 
-Le script stocke le hash MD5 comme métadonnée de chaque objet MinIO. Les checksums de référence sont dans `checksums/`.
-
-## DAGs Airflow
-
-Les DAGs sont déclenchés manuellement (`schedule=None`), conçus pour passer en `@monthly`.
-
-| DAG | Source | Destination | Description |
-|-----|--------|-------------|-------------|
-| `ingest_raw_csv` | `data/` (CSV) | `raw/` | Upload avec validation MD5, idempotent |
-| `transform_staging` | `raw/` (CSV) | `staging/` (Parquet) | Harmonisation colonnes + timestamps |
-
-### `ingest_raw_csv`
-- 5 tâches upload en parallèle (une par ligne) + 1 tâche `verify_md5`
-- Idempotent : skip si le fichier est déjà présent avec le même MD5
-- Credentials : user `ingestion`
-
-### `transform_staging`
-- Lit les CSV depuis `raw/` via boto3
-- Transformations : colonnes en lowercase, timestamp ISO 8601, types numériques explicites
-- Colonnes absentes (`elapsed_time` sur LineC/D/E) → `NULL`
-- Sortie : Parquet compressé snappy avec métadonnées (md5, source, rows)
-- Credentials : user `etl`
+> Note : le CLI upload toutes les lignes (y compris LineA) en fichier unique. Pour le mode batch de LineA, utiliser le DAG `ingest_lineA_batch`.
 
 ## Structure du projet
 
@@ -119,12 +149,15 @@ Les DAGs sont déclenchés manuellement (`schedule=None`), conçus pour passer e
 ├── airflow/
 │   ├── config/airflow.cfg
 │   ├── dags/
-│   │   ├── dag_ingest_raw.py       # DAG ingestion CSV → raw/
-│   │   └── dag_transform_staging.py # DAG transformation raw/ → staging/
+│   │   ├── dag_ingest_raw.py            # Ingestion LineB→E → raw/
+│   │   ├── dag_ingest_lineA_batch.py    # Ingestion LineA par chunks → raw/
+│   │   ├── dag_transform_staging.py     # Transform LineB→E raw/ → staging/
+│   │   └── dag_transform_lineA_batch.py # Transform LineA chunks raw/ → staging/
 │   ├── logs/
 │   └── plugins/
-│       └── minio_utils.py          # Utilitaires boto3 partagés entre DAGs
-├── checksums/          # MD5 de référence des CSV sources
+│       ├── datalake_datasets.py         # Datasets Airflow partagés (RAW_LINEA, RAW_MULTI)
+│       └── minio_utils.py              # Utilitaires boto3 partagés entre DAGs
+├── checksums/          # MD5 de référence des CSV sources (versionnés)
 ├── data/               # CSV bruts (gitignorés)
 ├── docs/
 │   ├── brief_minIO_dataLake.drawio

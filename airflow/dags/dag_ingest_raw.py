@@ -12,10 +12,11 @@ from pathlib import Path
 from airflow import DAG
 from airflow.operators.python import PythonOperator
 from airflow.utils.dates import days_ago
+from datalake_datasets import RAW_MULTI
 
 BUCKET = "raw"
 DATA_DIR = Path("/opt/airflow/data")
-LINES = ["lineA", "lineB", "lineC", "lineD", "lineE"]
+LINES = ["lineB", "lineC", "lineD", "lineE"]  # lineA gérée par ingest_lineA_batch
 
 default_args = {"owner": "engineer", "retries": 1}
 
@@ -106,6 +107,7 @@ with DAG(
     verify_task = PythonOperator(
         task_id="verify_md5",
         python_callable=verify_all,
+        outlets=[RAW_MULTI],
     )
 
     upload_tasks >> verify_task

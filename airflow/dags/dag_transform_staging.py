@@ -18,11 +18,12 @@ import pandas as pd
 from airflow import DAG
 from airflow.operators.python import PythonOperator
 from airflow.utils.dates import days_ago
+from datalake_datasets import RAW_MULTI
 
 RAW_BUCKET = "raw"
 STAGING_BUCKET = "staging"
 DATA_DIR = Path("/opt/airflow/data")
-LINES = ["lineA", "lineB", "lineC", "lineD", "lineE"]
+LINES = ["lineB", "lineC", "lineD", "lineE"]  # lineA gérée par transform_lineA_batch (chunks journaliers)
 
 EXPECTED_COLUMNS = {"timestamp", "temperature", "pressure", "elapsed_time", "label"}
 
@@ -137,7 +138,7 @@ with DAG(
     dag_id="transform_staging",
     default_args=default_args,
     description="Transformation raw/ → staging/ : harmonisation colonnes + format timestamp",
-    schedule=None,  # passer à "@monthly" pour automatiser
+    schedule=[RAW_MULTI],  # déclenché automatiquement après ingest_raw_csv
     start_date=days_ago(1),
     catchup=False,
     tags=["etl", "staging", "transform"],
