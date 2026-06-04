@@ -1,14 +1,15 @@
 """
-DAG de transformation raw/ → staging/.
+DAG de transformation raw/ → staging/ (schéma Silver unifié).
 
-Transformations appliquées :
-  - Colonnes renommées en lowercase (harmonisation inter-lignes)
-  - Colonne timestamp parsée en datetime64 puis re-sérialisée ISO 8601
-  - Types numériques validés (float64)
-  - Format de sortie : Parquet (compressé snappy)
+Schéma de sortie :
+  timestamp, line_id, temperature, pressure, elapsed_time, label, source_file, ingested_at
 
-Schedule : None (déclenchement manuel).
-Pour passer en mensuel : remplacer schedule=None par schedule="@monthly"
+Transformations appliquées via apply_silver_schema() :
+  - Colonnes en lowercase, elapsed_time absent → NULL
+  - Timestamp ISO 8601, types numériques explicites
+  - Ajout line_id, source_file, ingested_at
+  - Déduplication sur (timestamp, line_id)
+  - Format : Parquet compressé gzip
 """
 
 import io
@@ -24,8 +25,6 @@ RAW_BUCKET = "raw"
 STAGING_BUCKET = "staging"
 DATA_DIR = Path("/opt/airflow/data")
 LINES = ["lineB", "lineC", "lineD", "lineE"]  # lineA gérée par transform_lineA_batch (chunks journaliers)
-
-EXPECTED_COLUMNS = {"timestamp", "temperature", "pressure", "elapsed_time", "label"}
 
 default_args = {"owner": "engineer", "retries": 1}
 
@@ -55,33 +54,17 @@ def transform_line(line_name: str, **context):
     parquet_name = csv_path.stem + ".parquet"
     staging_key = build_key(line_name, year, month, parquet_name)
 
-    # Lecture depuis raw/
     client = get_s3_client(role="etl")
     raw_bytes = get_object_as_bytes(client, RAW_BUCKET, raw_key)
     df = pd.read_csv(io.BytesIO(raw_bytes))
 
-    # ── Transformations ────────────────────────────────────────────────
-    # 1. Colonnes en lowercase (Temperature → temperature, Elapsed_time → elapsed_time…)
-    df.columns = [col.lower() for col in df.columns]
+    # ── Schéma Silver unifié ───────────────────────────────────────────
+    from minio_utils import apply_silver_schema
+    df = apply_silver_schema(df, line_id=line_name, source_file=csv_path.name)
 
-    # Colonnes absentes → NULL (ex: elapsed_time absent sur LineC/D/E)
-    for col in EXPECTED_COLUMNS - set(df.columns):
-        df[col] = None
-        print(f"[WARN] {csv_path.name} : colonne '{col}' absente → NULL")
-
-    # 2. Timestamp : parsing puis re-sérialisation ISO 8601 sans timezone (cohérence inter-lignes)
-    df["timestamp"] = pd.to_datetime(df["timestamp"], errors="raise").dt.strftime("%Y-%m-%dT%H:%M:%S")
-
-    # 3. Types numériques explicites (elapsed_time peut être NULL)
-    for col in ("temperature", "pressure"):
-        df[col] = pd.to_numeric(df[col], errors="raise").astype("float64")
-    df["elapsed_time"] = pd.to_numeric(df["elapsed_time"], errors="coerce").astype("float64")
-
-    df["label"] = df["label"].astype("int8")
-
-    # ── Sérialisation Parquet ──────────────────────────────────────────
+    # ── Sérialisation Parquet gzip ─────────────────────────────────────
     buffer = io.BytesIO()
-    df.to_parquet(buffer, index=False, compression="snappy", engine="pyarrow")
+    df.to_parquet(buffer, index=False, compression="gzip", engine="pyarrow")
     parquet_bytes = buffer.getvalue()
 
     hex_md5, b64_md5 = compute_md5_bytes(parquet_bytes)

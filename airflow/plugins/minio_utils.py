@@ -69,3 +69,59 @@ def already_uploaded(client, bucket: str, key: str, hex_md5: str) -> bool:
 def get_object_as_bytes(client, bucket: str, key: str) -> bytes:
     resp = client.get_object(Bucket=bucket, Key=key)
     return resp["Body"].read()
+
+
+def apply_silver_schema(df, line_id: str, source_file: str):
+    """
+    Applique le schéma unifié Silver (staging) à un DataFrame.
+
+    Transformations :
+      - Colonnes en lowercase
+      - Colonnes manquantes → NULL
+      - Timestamp normalisé ISO 8601
+      - Types numériques explicites
+      - Ajout line_id, ingested_at, source_file
+      - Déduplication sur (timestamp, line_id)
+      - Ordre des colonnes conforme au schéma du document d'architecture
+
+    Retourne le DataFrame transformé.
+    """
+    import pandas as pd
+    from datetime import datetime, timezone
+
+    EXPECTED = {"timestamp", "temperature", "pressure", "elapsed_time", "label"}
+
+    # 1. Colonnes en lowercase
+    df.columns = [col.lower() for col in df.columns]
+
+    # 2. Colonnes absentes → NULL
+    for col in EXPECTED - set(df.columns):
+        df[col] = None
+
+    # 3. Timestamp ISO 8601
+    df["timestamp"] = (
+        pd.to_datetime(df["timestamp"], errors="raise")
+        .dt.strftime("%Y-%m-%dT%H:%M:%S")
+    )
+
+    # 4. Types numériques
+    for col in ("temperature", "pressure"):
+        df[col] = pd.to_numeric(df[col], errors="raise").astype("float64")
+    df["elapsed_time"] = pd.to_numeric(df["elapsed_time"], errors="coerce").astype("float64")
+    df["label"] = df["label"].astype("int8")
+
+    # 5. Champs Silver
+    df["line_id"] = line_id
+    df["source_file"] = source_file
+    df["ingested_at"] = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S")
+
+    # 6. Déduplication sur (timestamp, line_id)
+    before = len(df)
+    df = df.drop_duplicates(subset=["timestamp", "line_id"])
+    dropped = before - len(df)
+    if dropped:
+        print(f"[WARN] {dropped} doublon(s) supprimé(s) sur (timestamp, line_id)")
+
+    # 7. Ordre des colonnes conforme au schéma d'architecture
+    return df[["timestamp", "line_id", "temperature", "pressure",
+               "elapsed_time", "label", "source_file", "ingested_at"]]
