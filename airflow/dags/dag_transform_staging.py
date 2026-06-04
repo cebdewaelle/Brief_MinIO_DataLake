@@ -63,16 +63,18 @@ def transform_line(line_name: str, **context):
     # 1. Colonnes en lowercase (Temperature → temperature, Elapsed_time → elapsed_time…)
     df.columns = [col.lower() for col in df.columns]
 
-    missing = EXPECTED_COLUMNS - set(df.columns)
-    if missing:
-        raise ValueError(f"{csv_path.name} : colonnes manquantes après harmonisation : {missing}")
+    # Colonnes absentes → NULL (ex: elapsed_time absent sur LineC/D/E)
+    for col in EXPECTED_COLUMNS - set(df.columns):
+        df[col] = None
+        print(f"[WARN] {csv_path.name} : colonne '{col}' absente → NULL")
 
     # 2. Timestamp : parsing puis re-sérialisation ISO 8601 sans timezone (cohérence inter-lignes)
     df["timestamp"] = pd.to_datetime(df["timestamp"], errors="raise").dt.strftime("%Y-%m-%dT%H:%M:%S")
 
-    # 3. Types numériques explicites
-    for col in ("temperature", "pressure", "elapsed_time"):
+    # 3. Types numériques explicites (elapsed_time peut être NULL)
+    for col in ("temperature", "pressure"):
         df[col] = pd.to_numeric(df[col], errors="raise").astype("float64")
+    df["elapsed_time"] = pd.to_numeric(df["elapsed_time"], errors="coerce").astype("float64")
 
     df["label"] = df["label"].astype("int8")
 
