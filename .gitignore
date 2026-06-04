@@ -149,7 +149,11 @@ activemq-data/
 
 # Environments
 .env
+.env.local
 .envrc
+
+# Contexte Claude Code (notes internes)
+CLAUDE.md
 .venv
 env/
 venv/
