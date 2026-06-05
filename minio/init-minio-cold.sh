@@ -11,4 +11,8 @@ echo "[OK] Bucket archive créé sur MinIO Cold"
 mc ilm rule add --expire-days 730 cold/archive
 echo "[OK] Règle ILM expiration 730 jours sur archive/"
 
-echo "MinIO Cold prêt : bucket archive + règle ILM 730 jours."
+# ── SSE-S3 : chiffrement côté serveur sur archive/ ────────────
+mc encrypt set sse-s3 cold/archive
+echo "[OK] SSE-S3 activé sur archive/"
+
+echo "MinIO Cold prêt : bucket archive + règle ILM 730 jours + SSE-S3."

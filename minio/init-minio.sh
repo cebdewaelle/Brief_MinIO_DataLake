@@ -34,7 +34,14 @@ mc admin policy attach local policy-engineer     --user "${MINIO_USER_ENGINEER}"
 mc admin policy attach local policy-openmetadata --user "${MINIO_USER_OPENMETADATA}"
 echo "[OK] Policies attachées aux users"
 
-echo "MinIO prêt : 4 buckets, 5 policies, 5 users."
+# ── SSE-S3 : chiffrement côté serveur sur tous les buckets ────
+mc encrypt set sse-s3 local/raw
+mc encrypt set sse-s3 local/staging
+mc encrypt set sse-s3 local/curated
+mc encrypt set sse-s3 local/archive
+echo "[OK] SSE-S3 activé sur tous les buckets"
+
+echo "MinIO prêt : 4 buckets, 5 policies, 5 users, SSE-S3 activé."
 
 # ── ILM : tiering vers MinIO Cold ─────────────────────────
 # Enregistre le MinIO Cold comme tier froid (COLDTIER)
