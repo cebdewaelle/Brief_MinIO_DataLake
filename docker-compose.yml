@@ -20,7 +20,41 @@ services:
       timeout: 5s
       retries: 5
 
-  # Initialisation buckets, policies et users MinIO
+  # MinIO Cold — backend physique du tier froid (archivage ILM)
+  minio-cold:
+    image: minio/minio:latest
+    container_name: minio-cold
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      MINIO_ROOT_USER: "${MINIO_COLD_ROOT_USER}"
+      MINIO_ROOT_PASSWORD: "${MINIO_COLD_ROOT_PASSWORD}"
+    ports:
+      - "9002:9000"   # API S3 cold
+      - "9003:9001"   # Console web cold
+    volumes:
+      - minio_cold_data:/data
+    command: server /data --console-address ":9001"
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Initialisation du bucket archive sur MinIO Cold
+  minio-cold-init:
+    image: minio/mc:latest
+    container_name: minio-cold-init
+    restart: "no"
+    depends_on:
+      minio-cold:
+        condition: service_healthy
+    env_file: .env
+    volumes:
+      - ./minio/init-minio-cold.sh:/init-minio-cold.sh:ro
+    entrypoint: ["/bin/sh", "/init-minio-cold.sh"]
+
+  # Initialisation buckets, policies, users MinIO + config tier ILM
   minio-init:
     image: minio/mc:latest
     container_name: minio-init
@@ -28,6 +62,8 @@ services:
     depends_on:
       minio:
         condition: service_healthy
+      minio-cold-init:
+        condition: service_completed_successfully
     env_file: .env
     volumes:
       - ./minio/init-minio.sh:/init-minio.sh:ro
@@ -260,6 +296,7 @@ services:
 
 volumes:
   minio_data:
+  minio_cold_data:
   postgres_data:
   mysql_om_data:
   elasticsearch_data:

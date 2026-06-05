@@ -35,3 +35,17 @@ mc admin policy attach local policy-openmetadata --user "${MINIO_USER_OPENMETADA
 echo "[OK] Policies attachées aux users"
 
 echo "MinIO prêt : 4 buckets, 5 policies, 5 users."
+
+# ── ILM : tiering vers MinIO Cold ─────────────────────────
+# Enregistre le MinIO Cold comme tier froid (COLDTIER)
+mc ilm tier add minio local COLDTIER \
+  --endpoint "http://minio-cold:9000" \
+  --access-key "${MINIO_COLD_ROOT_USER}" \
+  --secret-key "${MINIO_COLD_ROOT_PASSWORD}" \
+  --bucket archive
+echo "[OK] Tier COLDTIER configuré (→ minio-cold/archive)"
+
+# Transition automatique vers COLDTIER après 180 jours
+mc ilm rule add --transition-days 180 --transition-tier COLDTIER local/raw
+mc ilm rule add --transition-days 180 --transition-tier COLDTIER local/staging
+echo "[OK] Règles ILM transition 180 jours sur raw/ et staging/"
