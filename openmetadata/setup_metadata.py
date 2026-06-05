@@ -22,6 +22,55 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+
+# ── Schéma Silver unifié (staging/) ──────────────────────────────────────────
+def build_silver_columns(elapsed_time_in_source: bool) -> list[dict]:
+    """Retourne la liste des colonnes du schéma Silver pour un container."""
+    elapsed_desc = (
+        "Temps écoulé depuis le démarrage de la ligne (secondes)."
+        if elapsed_time_in_source
+        else "Temps écoulé depuis le démarrage (secondes). Absent dans la source → NULL en staging."
+    )
+    return [
+        {
+            "name": "timestamp",
+            "dataType": "TIMESTAMP",
+            "description": "Horodatage de la mesure (ISO 8601).",
+        },
+        {
+            "name": "line_id",
+            "dataType": "VARCHAR",
+            "description": "Identifiant de la ligne de production (ex: lineA).",
+        },
+        {
+            "name": "temperature",
+            "dataType": "FLOAT",
+            "description": "Température relevée par le capteur (°C).",
+        },
+        {
+            "name": "pressure",
+            "dataType": "FLOAT",
+            "description": "Pression relevée par le capteur (bar).",
+        },
+        {"name": "elapsed_time", "dataType": "FLOAT", "description": elapsed_desc},
+        {
+            "name": "label",
+            "dataType": "INT",
+            "description": "0 = nominal, 1 = anomalie",
+        },
+        {
+            "name": "source_file",
+            "dataType": "VARCHAR",
+            "description": "Nom du fichier CSV source ayant produit cet enregistrement.",
+        },
+        {
+            "name": "ingested_at",
+            "dataType": "TIMESTAMP",
+            "description": "Horodatage d'ingestion en staging (UTC).",
+        },
+    ]
+
+
 # ── Métadonnées par ligne de production ───────────────────────────────────────
 LINES_METADATA = {
     "lineA": {
@@ -36,6 +85,7 @@ LINES_METADATA = {
             "| Particularité | Ingestion par chunks journaliers (10 000 mesures) |"
         ),
         "prefix": "production_lines/line=lineA/",
+        "elapsed_time_in_source": True,
         "tags": ["LineA", "Stable"],
     },
     "lineB": {
@@ -49,6 +99,7 @@ LINES_METADATA = {
             "| Colonnes | timestamp, temperature, pressure, elapsed_time, label |"
         ),
         "prefix": "production_lines/line=lineB/",
+        "elapsed_time_in_source": True,
         "tags": ["LineB", "Flux"],
     },
     "lineC": {
@@ -63,6 +114,7 @@ LINES_METADATA = {
             "| Particularité | elapsed_time absent → NULL en staging |"
         ),
         "prefix": "production_lines/line=lineC/",
+        "elapsed_time_in_source": False,
         "tags": ["LineC", "Turbulent"],
     },
     "lineD": {
@@ -77,6 +129,7 @@ LINES_METADATA = {
             "| Particularité | elapsed_time absent → NULL en staging |"
         ),
         "prefix": "production_lines/line=lineD/",
+        "elapsed_time_in_source": False,
         "tags": ["LineD", "SpikeControl"],
     },
     "lineE": {
@@ -91,6 +144,7 @@ LINES_METADATA = {
             "| Particularité | elapsed_time absent → NULL en staging |"
         ),
         "prefix": "production_lines/line=lineE/",
+        "elapsed_time_in_source": False,
         "tags": ["LineE", "SmoothRun"],
     },
 }
@@ -107,7 +161,10 @@ class OpenMetadataClient:
     def _authenticate(self, email: str, password: str):
         resp = self.session.post(
             f"{self.base_url}/api/v1/users/login",
-            json={"email": email, "password": base64.b64encode(password.encode()).decode()},
+            json={
+                "email": email,
+                "password": base64.b64encode(password.encode()).decode(),
+            },
         )
         resp.raise_for_status()
         token = resp.json()["accessToken"]
@@ -124,7 +181,9 @@ class OpenMetadataClient:
     def _put(self, path: str, payload: dict) -> dict:
         if self.dry_run:
             print(f"  [DRY-RUN] PUT {path}")
-            print(f"            {json.dumps(payload, indent=2, ensure_ascii=False)[:200]}")
+            print(
+                f"            {json.dumps(payload, indent=2, ensure_ascii=False)[:200]}"
+            )
             return {}
         resp = self.session.put(f"{self.base_url}{path}", json=payload)
         resp.raise_for_status()
@@ -139,12 +198,15 @@ class OpenMetadataClient:
             print(f"[TEAM] '{name}' déjà présente (id: {existing['id']})")
             return existing["id"]
 
-        result = self._put("/api/v1/teams", {
-            "name": name,
-            "displayName": "Équipe Maintenance",
-            "description": "Responsables de la maintenance des lignes de production industrielles.",
-            "teamType": "Group",  # Group = seul type pouvant posséder des entités dans OM
-        })
+        result = self._put(
+            "/api/v1/teams",
+            {
+                "name": name,
+                "displayName": "Équipe Maintenance",
+                "description": "Responsables de la maintenance des lignes de production industrielles.",
+                "teamType": "Group",  # Group = seul type pouvant posséder des entités dans OM
+            },
+        )
         team_id = result.get("id", "dry-run-id")
         print(f"[TEAM] '{name}' créée (id: {team_id})")
         return team_id
@@ -162,8 +224,12 @@ class OpenMetadataClient:
                 "config": {
                     "type": "S3",
                     "awsConfig": {
-                        "awsAccessKeyId": os.environ.get("MINIO_USER_OPENMETADATA", "openmetadata"),
-                        "awsSecretAccessKey": os.environ.get("MINIO_PASS_OPENMETADATA", "openmetadata_secret123"),
+                        "awsAccessKeyId": os.environ.get(
+                            "MINIO_USER_OPENMETADATA", "openmetadata"
+                        ),
+                        "awsSecretAccessKey": os.environ.get(
+                            "MINIO_PASS_OPENMETADATA", "openmetadata_secret123"
+                        ),
                         "awsRegion": "us-east-1",
                         "endPointURL": "http://minio:9000",
                     },
@@ -186,6 +252,10 @@ class OpenMetadataClient:
             "service": "minio-datalake",  # FQN string, pas un objet
             "prefix": meta["prefix"],
             "owners": [{"id": team_id, "type": "team"}],
+            "dataModel": {
+                "isPartitioned": True,
+                "columns": build_silver_columns(meta["elapsed_time_in_source"]),
+            },
         }
         result = self._put("/api/v1/containers", payload)
         container_id = result.get("id", "dry-run-id")
@@ -195,12 +265,19 @@ class OpenMetadataClient:
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--om-url", default="http://localhost:8585")
-    parser.add_argument("--om-email", default=os.environ.get("OM_ADMIN_EMAIL", "admin@open-metadata.org"))
-    parser.add_argument("--om-password", default=os.environ.get("OM_ADMIN_PASSWORD", "admin"))
+    parser.add_argument(
+        "--om-email",
+        default=os.environ.get("OM_ADMIN_EMAIL", "admin@open-metadata.org"),
+    )
+    parser.add_argument(
+        "--om-password", default=os.environ.get("OM_ADMIN_PASSWORD", "admin")
+    )
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args()
 
-    client = OpenMetadataClient(args.om_url, args.om_email, args.om_password, args.dry_run)
+    client = OpenMetadataClient(
+        args.om_url, args.om_email, args.om_password, args.dry_run
+    )
 
     print("\n── Équipe ──────────────────────────────────────")
     team_id = client.ensure_team("Maintenance")
