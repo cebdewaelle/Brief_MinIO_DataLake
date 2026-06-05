@@ -1,38 +1,38 @@
 <mxfile host="app.diagrams.net">
   <diagram name="Page-1" id="OFf5uGfCV3HsBrZoMn46">
-    <mxGraphModel dx="517" dy="317" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="827" pageHeight="1169" math="0" shadow="0">
+    <mxGraphModel dx="876" dy="457" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="827" pageHeight="1169" math="0" shadow="0">
       <root>
         <mxCell id="0" />
         <mxCell id="1" parent="0" />
         <mxCell id="M0pjtGEgwTosA1Wki6BR-1" parent="1" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;fontSize=16;fontStyle=1;" value="Architecture DataLake MinIO — Capteurs industriels (5 lignes de production)" vertex="1">
           <mxGeometry height="40" width="1000" x="330" y="40" as="geometry" />
         </mxCell>
-        <mxCell id="M0pjtGEgwTosA1Wki6BR-18" edge="1" parent="1" source="M0pjtGEgwTosA1Wki6BR-2" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;entryX=0;entryY=0.5;entryDx=0;entryDy=0;fontStyle=1;fontSize=9;" target="M0pjtGEgwTosA1Wki6BR-12" value="boto3.upload_file()&#xa;(as-is)">
+        <mxCell id="M0pjtGEgwTosA1Wki6BR-18" edge="1" parent="1" source="M0pjtGEgwTosA1Wki6BR-2" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;entryX=0;entryY=0.5;entryDx=0;entryDy=0;fontStyle=1;fontSize=9;" target="M0pjtGEgwTosA1Wki6BR-12" value="">
           <mxGeometry relative="1" as="geometry">
             <Array as="points" />
             <mxPoint x="470" y="460" as="targetPoint" />
           </mxGeometry>
         </mxCell>
         <mxCell id="M0pjtGEgwTosA1Wki6BR-2" parent="1" style="swimlane;startSize=30;fillColor=#dae8fc;strokeColor=#6c8ebf;fontStyle=1;fontSize=13;fontColor=#00305a;" value="Sources (CSV)" vertex="1">
-          <mxGeometry height="600" width="200" x="200" y="160" as="geometry" />
+          <mxGeometry height="600" width="240" x="160" y="160" as="geometry" />
         </mxCell>
         <mxCell id="M0pjtGEgwTosA1Wki6BR-3" parent="M0pjtGEgwTosA1Wki6BR-2" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#6c8ebf;fontSize=9;align=left;spacingLeft=5;" value="LineA_Stable_10K&lt;br&gt;volumétrie: 10 000 lignes&lt;br&gt;colonnes: timestamp, Temperature, pressure, elapsed_time, label" vertex="1">
-          <mxGeometry height="70" width="180" x="10" y="60" as="geometry" />
+          <mxGeometry height="70" width="220" x="10" y="60" as="geometry" />
         </mxCell>
         <mxCell id="M0pjtGEgwTosA1Wki6BR-4" parent="M0pjtGEgwTosA1Wki6BR-2" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#6c8ebf;fontSize=9;align=left;spacingLeft=5;" value="LineB_Flux&lt;br&gt;volumétrie: 5 000 lignes&lt;br&gt;colonnes: timestamp, temperature, pressure, Elapsed_time, label" vertex="1">
-          <mxGeometry height="70" width="180" x="10" y="150" as="geometry" />
+          <mxGeometry height="70" width="220" x="10" y="150" as="geometry" />
         </mxCell>
         <mxCell id="M0pjtGEgwTosA1Wki6BR-5" parent="M0pjtGEgwTosA1Wki6BR-2" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#6c8ebf;fontSize=9;align=left;spacingLeft=5;" value="LineC_Turbulent&lt;br&gt;volumétrie: 5 000 lignes&lt;br&gt;colonnes: timestamp, Temperature, pressure, label" vertex="1">
-          <mxGeometry height="70" width="180" x="10" y="240" as="geometry" />
+          <mxGeometry height="70" width="220" x="10" y="240" as="geometry" />
         </mxCell>
         <mxCell id="M0pjtGEgwTosA1Wki6BR-6" parent="M0pjtGEgwTosA1Wki6BR-2" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#6c8ebf;fontSize=9;align=left;spacingLeft=5;" value="LineD_SpikeControl&lt;br&gt;volumétrie: 5 000 lignes&lt;br&gt;colonness: timestamp, Temperature, pressure, label" vertex="1">
-          <mxGeometry height="70" width="180" x="10" y="330" as="geometry" />
+          <mxGeometry height="70" width="220" x="10" y="330" as="geometry" />
         </mxCell>
         <mxCell id="M0pjtGEgwTosA1Wki6BR-7" parent="M0pjtGEgwTosA1Wki6BR-2" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#6c8ebf;fontSize=9;align=left;spacingLeft=5;" value="LineE_SmoothRun&lt;br&gt;volumétrie: 5 000 lignes&lt;br&gt;colonnes: timestamp, Temperature, pressure, label" vertex="1">
-          <mxGeometry height="70" width="180" x="10" y="420" as="geometry" />
+          <mxGeometry height="70" width="220" x="10" y="420" as="geometry" />
         </mxCell>
         <mxCell id="M0pjtGEgwTosA1Wki6BR-8" parent="M0pjtGEgwTosA1Wki6BR-2" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=9;align=left;spacingLeft=5;" value="⚠ Schéma hétérogene&lt;br&gt;• Casse colonnes variable&lt;br&gt;• elapsed_time absent des lines C,D et E" vertex="1">
-          <mxGeometry height="55" width="180" x="10" y="520" as="geometry" />
+          <mxGeometry height="55" width="220" x="10" y="520" as="geometry" />
         </mxCell>
         <mxCell id="M0pjtGEgwTosA1Wki6BR-28" edge="1" parent="1" source="M0pjtGEgwTosA1Wki6BR-12" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" target="M0pjtGEgwTosA1Wki6BR-22">
           <mxGeometry relative="1" as="geometry" />
@@ -55,8 +55,8 @@
         <mxCell id="M0pjtGEgwTosA1Wki6BR-17" parent="M0pjtGEgwTosA1Wki6BR-12" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#aaaaaa;fontSize=10;" value="Ingestion : boto3.upload_file()&#xa;batch mensuel ou push fichier à chaud" vertex="1">
           <mxGeometry height="40" width="220" x="10" y="520" as="geometry" />
         </mxCell>
-        <mxCell id="M0pjtGEgwTosA1Wki6BR-21" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=9;align=center;fontStyle=2;" value="import boto3&#xa;s3 = boto3.client(&#xa;  &#39;s3&#39;, endpoint_url=...&#xa;)&#xa;s3.upload_file()" vertex="1">
-          <mxGeometry height="70" width="110" x="405" y="430" as="geometry" />
+        <mxCell id="M0pjtGEgwTosA1Wki6BR-21" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#6c8ebf;fontSize=9;align=center;fontStyle=2;" value="boto3" vertex="1">
+          <mxGeometry height="30" width="80" x="420" y="470" as="geometry" />
         </mxCell>
         <mxCell id="M0pjtGEgwTosA1Wki6BR-36" edge="1" parent="1" source="M0pjtGEgwTosA1Wki6BR-22" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" target="M0pjtGEgwTosA1Wki6BR-30">
           <mxGeometry relative="1" as="geometry" />
@@ -91,11 +91,8 @@
         <mxCell id="M0pjtGEgwTosA1Wki6BR-32" parent="M0pjtGEgwTosA1Wki6BR-30" style="text;html=1;align=left;verticalAlign=top;fontSize=10;whiteSpace=wrap;strokeColor=#c8a400;fillColor=#fffde7;rounded=1;" value="&lt;div&gt;&lt;br&gt;&lt;/div&gt;&lt;div&gt;&lt;br&gt;&lt;/div&gt;&lt;div&gt;Tables exposees :&lt;/div&gt;&lt;br&gt;toutes_lignes.parquet&lt;br&gt;  30 000 lignes, 5 sources&lt;br&gt;&lt;br&gt;anomalies.parquet&lt;br&gt;  308 evenements (label=1)&lt;br&gt;  pret pour entrainement ML&lt;br&gt;&lt;br&gt;aggregated_hourly.parquet&lt;br&gt;  min/max/mean/std par heure&lt;br&gt;  par ligne de production" vertex="1">
           <mxGeometry height="205" width="220" x="10" y="90" as="geometry" />
         </mxCell>
-        <mxCell id="M0pjtGEgwTosA1Wki6BR-33" parent="M0pjtGEgwTosA1Wki6BR-30" style="text;html=1;align=left;verticalAlign=top;fontSize=10;whiteSpace=wrap;strokeColor=#c8a400;fillColor=#fff9c4;rounded=1;" value="&lt;div&gt;&lt;br&gt;&lt;/div&gt;&lt;div&gt;Feature Engineering :&lt;/div&gt;+ Rolling mean 10 min (T, P)&lt;br&gt;+ Ecart-type glissant (sigma)&lt;br&gt;+ Delta pression (deltaP/min)&lt;br&gt;+ Taux anomalie par ligne" vertex="1">
-          <mxGeometry height="95" width="220" x="10" y="320" as="geometry" />
-        </mxCell>
         <mxCell id="M0pjtGEgwTosA1Wki6BR-34" parent="M0pjtGEgwTosA1Wki6BR-30" style="text;html=1;align=left;verticalAlign=top;fontSize=10;whiteSpace=wrap;strokeColor=#c8a400;fillColor=#fffde7;rounded=1;" value="Format : Parquet (Zstd)&#xa;Acces : lecture seule&#xa;Retention : 6 mois" vertex="1">
-          <mxGeometry height="60" width="220" x="10" y="440" as="geometry" />
+          <mxGeometry height="60" width="220" x="10" y="330" as="geometry" />
         </mxCell>
         <mxCell id="M0pjtGEgwTosA1Wki6BR-35" parent="M0pjtGEgwTosA1Wki6BR-30" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#aaaaaa;fontSize=10;" value="&lt;div&gt;Traitement : PySpark&lt;/div&gt;&lt;div&gt;Refresh : mensuel (batch)&lt;/div&gt;" vertex="1">
           <mxGeometry height="36" width="220" x="10" y="520" as="geometry" />
