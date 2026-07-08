@@ -1,0 +1,269 @@
+services:
+
+  # ─────────────────────────────────────────────
+  # MinIO — stockage objet S3-compatible
+  # ─────────────────────────────────────────────
+  minio:
+    image: minio/minio:latest
+    container_name: minio
+    restart: unless-stopped
+    env_file: .env
+    ports:
+      - "9000:9000"   # API S3
+      - "9001:9001"   # Console web
+    volumes:
+      - minio_data:/data
+    command: server /data --console-address ":9001"
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Initialisation buckets, policies et users MinIO
+  minio-init:
+    image: minio/mc:latest
+    container_name: minio-init
+    restart: "no"
+    depends_on:
+      minio:
+        condition: service_healthy
+    env_file: .env
+    volumes:
+      - ./minio/init-minio.sh:/init-minio.sh:ro
+      - ./minio/policies:/policies:ro
+    entrypoint: ["/bin/sh", "/init-minio.sh"]
+
+  # ─────────────────────────────────────────────
+  # PostgreSQL — backend Airflow
+  # ─────────────────────────────────────────────
+  postgres:
+    image: postgres:15-alpine
+    container_name: postgres
+    restart: unless-stopped
+    env_file: .env
+    ports:
+      - "5434:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U airflow"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ─────────────────────────────────────────────
+  # Airflow — orchestration ETL (LocalExecutor)
+  # ─────────────────────────────────────────────
+  airflow-init:
+    image: apache/airflow:2.9.3
+    container_name: airflow-init
+    restart: "no"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    env_file: .env
+    environment:
+      AIRFLOW__CORE__LOAD_EXAMPLES: "false"
+    volumes:
+      - ./airflow/dags:/opt/airflow/dags
+      - ./airflow/logs:/opt/airflow/logs
+      - ./airflow/plugins:/opt/airflow/plugins
+    entrypoint: ["/bin/bash", "-c", "airflow db migrate && airflow users create --username $${AIRFLOW_ADMIN_USER} --password $${AIRFLOW_ADMIN_PASSWORD} --firstname Admin --lastname User --role Admin --email $${AIRFLOW_ADMIN_EMAIL}"]
+
+  airflow-webserver:
+    image: apache/airflow:2.9.3
+    container_name: airflow-webserver
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    env_file: .env
+    environment:
+      AIRFLOW__CORE__LOAD_EXAMPLES: "false"
+      _PIP_ADDITIONAL_REQUIREMENTS: "boto3>=1.34 python-dotenv>=1.0 pandas>=2.0 pyarrow>=14.0"
+      PYTHONDONTWRITEBYTECODE: "1"
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./airflow/dags:/opt/airflow/dags
+      - ./airflow/logs:/opt/airflow/logs
+      - ./airflow/plugins:/opt/airflow/plugins
+      - ./airflow/config/airflow.cfg:/opt/airflow/airflow.cfg
+      - ./data:/opt/airflow/data:ro
+    command: webserver
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  airflow-scheduler:
+    image: apache/airflow:2.9.3
+    container_name: airflow-scheduler
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    env_file: .env
+    environment:
+      AIRFLOW__CORE__LOAD_EXAMPLES: "false"
+      _PIP_ADDITIONAL_REQUIREMENTS: "boto3>=1.34 python-dotenv>=1.0 pandas>=2.0 pyarrow>=14.0"
+      PYTHONDONTWRITEBYTECODE: "1"
+    volumes:
+      - ./airflow/dags:/opt/airflow/dags
+      - ./airflow/logs:/opt/airflow/logs
+      - ./airflow/plugins:/opt/airflow/plugins
+      - ./airflow/config/airflow.cfg:/opt/airflow/airflow.cfg
+      - ./data:/opt/airflow/data:ro
+    command: scheduler
+
+  # ─────────────────────────────────────────────
+  # Spark — traitement distribué (Curated / features)
+  # ─────────────────────────────────────────────
+  spark-master:
+    image: apache/spark:3.5.5
+    container_name: spark-master
+    restart: unless-stopped
+    user: root
+    ports:
+      - "7077:7077"   # Spark master port
+      - "8082:8080"   # Spark UI (remappé pour éviter conflit avec Airflow)
+    volumes:
+      - ./spark/jobs:/opt/spark/jobs
+    command: /opt/spark/bin/spark-class org.apache.spark.deploy.master.Master
+
+  spark-worker:
+    image: apache/spark:3.5.5
+    container_name: spark-worker
+    restart: unless-stopped
+    user: root
+    depends_on:
+      - spark-master
+    environment:
+      SPARK_WORKER_MEMORY: 2g
+      SPARK_WORKER_CORES: 2
+    volumes:
+      - ./spark/jobs:/opt/spark/jobs
+    command: /opt/spark/bin/spark-class org.apache.spark.deploy.worker.Worker spark://spark-master:7077
+
+  # ─────────────────────────────────────────────
+  # OpenMetadata — catalogue de données
+  # ─────────────────────────────────────────────
+
+  # MySQL — backend OpenMetadata (OM ne supporte pas PG)
+  mysql-om:
+    image: mysql:8.0
+    container_name: mysql-om
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: om_root_password
+      MYSQL_USER: openmetadata_user
+      MYSQL_PASSWORD: openmetadata_password
+      MYSQL_DATABASE: openmetadata_db
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_om_data:/var/lib/mysql
+    command: --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci --default-authentication-plugin=mysql_native_password
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-pom_root_password"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+
+  # Elasticsearch — moteur de recherche OpenMetadata
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.10.4
+    container_name: elasticsearch
+    restart: unless-stopped
+    environment:
+      discovery.type: single-node
+      ES_JAVA_OPTS: "-Xms1g -Xmx1g"
+      xpack.security.enabled: "false"
+    ports:
+      - "9200:9200"
+    volumes:
+      - elasticsearch_data:/usr/share/elasticsearch/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:9200/_cluster/health | grep -qE '\"status\":\"(green|yellow)\"'"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+
+  # Migration Flyway/Liquibase — à exécuter une fois avant le serveur
+  openmetadata-migrate:
+    image: openmetadata/server:1.5.14
+    container_name: openmetadata-migrate
+    restart: "no"
+    depends_on:
+      mysql-om:
+        condition: service_healthy
+      elasticsearch:
+        condition: service_healthy
+    environment:
+      DB_DRIVER_CLASS: com.mysql.cj.jdbc.Driver
+      DB_SCHEME: mysql
+      DB_USE_SSL: "false"
+      DB_USER: root
+      DB_USER_PASSWORD: om_root_password
+      DB_HOST: mysql-om
+      DB_PORT: "3306"
+      OM_DATABASE: openmetadata_db
+      ELASTICSEARCH_HOST: elasticsearch
+      ELASTICSEARCH_PORT: "9200"
+      ELASTICSEARCH_SCHEME: http
+    entrypoint: ["/bin/bash", "-c", "./bootstrap/openmetadata-ops.sh migrate"]
+
+  # OpenMetadata Server — UI + API catalogue
+  openmetadata-server:
+    image: openmetadata/server:1.5.14
+    container_name: openmetadata-server
+    restart: unless-stopped
+    depends_on:
+      mysql-om:
+        condition: service_healthy
+      elasticsearch:
+        condition: service_healthy
+      openmetadata-migrate:
+        condition: service_completed_successfully
+    environment:
+      OPENMETADATA_CLUSTER_NAME: openmetadata
+      # Base de données (root requis pour les migrations Liquibase)
+      DB_DRIVER_CLASS: com.mysql.cj.jdbc.Driver
+      DB_SCHEME: mysql
+      DB_USE_SSL: "false"
+      DB_USER: root
+      DB_USER_PASSWORD: om_root_password
+      DB_HOST: mysql-om
+      DB_PORT: "3306"
+      OM_DATABASE: openmetadata_db
+      # Elasticsearch
+      ELASTICSEARCH_HOST: elasticsearch
+      ELASTICSEARCH_PORT: "9200"
+      ELASTICSEARCH_SCHEME: http
+      # Airflow (pipeline ingestion vers nos buckets)
+      AIRFLOW_HOST: http://airflow-webserver:8080
+      AIRFLOW_USERNAME: admin
+      AIRFLOW_PASSWORD: admin
+      SERVER_HOST_API_URL: http://openmetadata-server:8585/api
+      # Auth (no-auth en dev)
+      AUTHENTICATION_PROVIDER: basic
+      AUTHORIZER_CLASS_NAME: org.openmetadata.service.security.DefaultAuthorizer
+    ports:
+      - "8585:8585"   # UI + API
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8585/api/v1/system/version || exit 1"]
+      interval: 30s
+      timeout: 15s
+      retries: 10
+
+volumes:
+  minio_data:
+  postgres_data:
+  mysql_om_data:
+  elasticsearch_data:
+
+networks:
+  default:
+    name: datalake-network
